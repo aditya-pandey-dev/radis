@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """Contains the :py:class:`~radis.lbl.factory.SpectrumFactory` class, which is
 the core of the RADIS Line-by-Line module.
-
 Examples
 --------
 
