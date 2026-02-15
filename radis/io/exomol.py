@@ -34,6 +34,7 @@ def fetch_exomol(
     engine="default",
     output="pandas",
     skip_optional_data=True,
+    broadening_species="air",
     **kwargs,
 ):
     """Stream ExoMol file from EXOMOL website. Unzip and build a HDF5 file directly.
@@ -76,6 +77,17 @@ def fetch_exomol(
         load only specific wavenumbers.
     columns: list of str
         list of columns to load. If ``None``, returns all columns in the file.
+    broadening_species: ``str``
+        Broadening partner molecule for ExoMol line shape coefficients.
+        Supported values: ``'air'`` (default), ``'He'``, ``'H2'``, ``'CO2'``,
+        ``'H2O'``, ``'self'``.
+        If the requested broadening data is not available for the molecule,
+        falls back to ``'air'`` broadening with a warning.
+
+        Example::
+
+            fetch_exomol('CO2', broadening_species='H2')  # H2 broadening (useful for Jupiter-like atmospheres)
+            fetch_exomol('CO2', broadening_species='He')  # He broadening
 
     Other Parameters
     ----------------
@@ -161,6 +173,14 @@ def fetch_exomol(
         raise ValueError(
             f"In fetch_exomol, ``isotope`` must be an integer. Got `{isotope}` "
             + "Only one isotope can be queried at a time. "
+        )
+
+    # Validate broadening_species
+    _supported_species = ["air", "He", "H2", "CO2", "H2O", "self"]
+    if broadening_species not in _supported_species:
+        raise ValueError(
+            f"broadening_species={broadening_species!r} is not supported. "
+            f"Choose one of: {_supported_species}"
         )
 
     full_molecule_name = get_exomol_full_isotope_name(molecule, isotope)
@@ -266,8 +286,24 @@ def fetch_exomol(
             f"jlower not found. Maybe try to delete cache file {local_files} and restart?"
         )
 
-    # Add broadening
-    mdb.set_broadening_coef(df, output=output, species="air")
+    # Add broadening using the requested species.
+    # Falls back to 'air' if the requested species data is not available.
+    if broadening_species != "air":
+        try:
+            mdb.set_broadening_coef(df, output=output, species=broadening_species)
+            if verbose:
+                print(f"Using {broadening_species} broadening coefficients.")
+        except Exception:
+            import warnings
+            warnings.warn(
+                f"Broadening data for species '{broadening_species}' not available "
+                f"for {molecule}. Falling back to 'air' broadening.",
+                UserWarning,
+                stacklevel=2,
+            )
+            mdb.set_broadening_coef(df, output=output, species="air")
+    else:
+        mdb.set_broadening_coef(df, output=output, species="air")
 
     # Add self broadening if available
     mdb.set_broadening_coef(df, output=output, species="self")
